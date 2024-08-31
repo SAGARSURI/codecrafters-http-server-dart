@@ -5,5 +5,10 @@ void main() async {
 
   await for (final clientSocket in serverSocket) {
     print("Client connected");
+    clientSocket.listen((List<int> data) {
+      String response = 'HTTP/1.1 200 OK\r\n\r\n';
+      clientSocket.write(response);
+      clientSocket.close();
+    });
   }
 }
