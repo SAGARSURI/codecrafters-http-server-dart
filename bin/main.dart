@@ -2,7 +2,7 @@ import 'dart:io';
 
 const crlf = '\r\n';
 
-void main() async {
+void main(List<String> args) async {
   var serverSocket = await ServerSocket.bind('0.0.0.0', 4221);
 
   await for (final clientSocket in serverSocket) {
@@ -38,6 +38,29 @@ void main() async {
         return;
       }
 
+      if (endpoint == 'files') {
+        final fileName = pathSegments[2];
+
+        if (args.first != '--directory') {
+          throw Exception('No directory provided');
+        }
+        final directoryName = args.last;
+        final filPath = '$directoryName/$fileName';
+        final file = File(filPath);
+        if (!file.existsSync()) {
+          clientSocket.write(buildResponse(ResponseType.notFound));
+          return;
+        }
+        final fileContent = file.readAsStringSync();
+        clientSocket.write(
+          buildResponse(
+            ResponseType.ok,
+            body: fileContent,
+            contentType: 'application/octet-stream',
+          ),
+        );
+      }
+
       if (endpoint == 'user-agent') {
         final userAgentContent = contents[2].split(': ')[1].trim();
 
@@ -55,9 +78,12 @@ void main() async {
   }
 }
 
-String buildResponse(ResponseType responseType, {String? body}) {
+String buildResponse(
+  ResponseType responseType, {
+  String? body,
+  String contentType = 'text/plain',
+}) {
   final contentLength = body?.length;
-  final contentType = 'text/plain';
   return responseBuilder(
     responseType: responseType,
     contentType: contentType,
