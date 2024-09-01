@@ -19,59 +19,83 @@ void main(List<String> args) async {
       //   requestBody,
       //   ...
       // ] = contents;
-      final path = requestLine.split(' ')[1];
-
-      if (path == '/') {
-        clientSocket.write(buildResponse(ResponseType.ok));
-        return;
-      }
-
+      final requestType = requestLine.split(' ')[0];
+      final path = requestLine.split(' ')[1].trim();
       final pathSegments = path.split('/');
       final endpoint = pathSegments[1];
-      if (endpoint == 'echo') {
-        clientSocket.write(
-          buildResponse(
-            ResponseType.ok,
-            body: pathSegments.last,
-          ),
-        );
-        return;
-      }
 
-      if (endpoint == 'files') {
-        final fileName = pathSegments[2];
-
-        if (args.first != '--directory') {
-          throw Exception('No directory provided');
-        }
-        final directoryName = args.last;
-        final filPath = '$directoryName/$fileName';
-        final file = File(filPath);
-        if (!file.existsSync()) {
-          clientSocket.write(buildResponse(ResponseType.notFound));
+      if (requestType == 'GET') {
+        if (path == '/') {
+          clientSocket.write(buildResponse(ResponseType.ok));
           return;
         }
-        final fileContent = file.readAsStringSync();
-        clientSocket.write(
-          buildResponse(
-            ResponseType.ok,
-            body: fileContent,
-            contentType: 'application/octet-stream',
-          ),
-        );
-      }
 
-      if (endpoint == 'user-agent') {
-        final userAgentContent = contents[2].split(': ')[1].trim();
+        if (endpoint == 'echo') {
+          clientSocket.write(
+            buildResponse(
+              ResponseType.ok,
+              body: pathSegments.last,
+            ),
+          );
+          return;
+        }
 
-        clientSocket.write(
-          buildResponse(
-            ResponseType.ok,
-            body: userAgentContent,
-          ),
-        );
-      } else {
-        clientSocket.write(buildResponse(ResponseType.notFound));
+        if (endpoint == 'files') {
+          final fileName = pathSegments[2];
+
+          if (args.first != '--directory') {
+            throw Exception('No directory provided');
+          }
+          final directoryName = args.last;
+          final filPath = '$directoryName/$fileName';
+          final file = File(filPath);
+          if (!file.existsSync()) {
+            clientSocket.write(buildResponse(ResponseType.notFound));
+            return;
+          }
+          final fileContent = file.readAsStringSync();
+          clientSocket.write(
+            buildResponse(
+              ResponseType.ok,
+              body: fileContent,
+              contentType: 'application/octet-stream',
+            ),
+          );
+        }
+
+        if (endpoint == 'user-agent') {
+          final userAgentContent = contents[2].split(': ')[1].trim();
+
+          clientSocket.write(
+            buildResponse(
+              ResponseType.ok,
+              body: userAgentContent,
+            ),
+          );
+        } else {
+          clientSocket.write(buildResponse(ResponseType.notFound));
+        }
+      } else if (requestType == 'POST') {
+        if (endpoint == 'files') {
+          final fileName = pathSegments[2];
+          final requestBody = contents.last;
+
+          if (args.first != '--directory') {
+            throw Exception('No directory provided');
+          }
+          final directoryName = args.last;
+          final filPath = '$directoryName/$fileName';
+          final file = File(filPath);
+          if (!file.existsSync()) {
+            file.createSync(recursive: true);
+          }
+          file.writeAsStringSync(requestBody);
+          clientSocket.write(
+            buildResponse(
+              ResponseType.created,
+            ),
+          );
+        }
       }
       clientSocket.close();
     });
@@ -117,7 +141,8 @@ String responseBuilder({
 
 enum ResponseType {
   ok(200, 'OK'),
-  notFound(404, 'Not Found');
+  notFound(404, 'Not Found'),
+  created(201, 'Created');
 
   const ResponseType(this.code, this.message);
   final int code;
