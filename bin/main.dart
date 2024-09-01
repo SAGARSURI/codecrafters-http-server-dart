@@ -1,7 +1,7 @@
 import 'dart:io';
 
-const http200 = 'HTTP/1.1 200 OK\r\n\r\n';
-const http404 = 'HTTP/1.1 404 Not Found\r\n\r\n';
+const crlf = '\r\n';
+
 void main() async {
   var serverSocket = await ServerSocket.bind('0.0.0.0', 4221);
 
@@ -9,24 +9,46 @@ void main() async {
     print("Client connected");
     clientSocket.listen((List<int> data) {
       String request = String.fromCharCodes(data);
-      final requestLine = request = request.split('\r\n')[0];
+      final contents = request.split(crlf);
+      final requestLine = contents.first;
+      // final [
+      //   requestLine,
+      //   requestHost,
+      //   requestUserAgent,
+      //   requestMediaType,
+      //   requestBody,
+      //   ...
+      // ] = contents;
       final path = requestLine.split(' ')[1];
 
       if (path == '/') {
-        clientSocket.write(http200);
+        clientSocket.write(buildResponse(ResponseType.ok));
         return;
       }
 
       final pathSegments = path.split('/');
-      if (pathSegments.length > 2 && pathSegments[1] == 'echo') {
+      final endpoint = pathSegments[1];
+      if (endpoint == 'echo') {
         clientSocket.write(
           buildResponse(
             ResponseType.ok,
             body: pathSegments.last,
           ),
         );
+        return;
+      }
+
+      if (endpoint == 'user-agent') {
+        final userAgentContent = contents[2].split(': ')[1].trim();
+
+        clientSocket.write(
+          buildResponse(
+            ResponseType.ok,
+            body: userAgentContent,
+          ),
+        );
       } else {
-        clientSocket.write(http404);
+        clientSocket.write(buildResponse(ResponseType.notFound));
       }
       clientSocket.close();
     });
@@ -51,14 +73,16 @@ String responseBuilder({
   String? body,
 }) {
   String statusLine =
-      'HTTP/1.1 ${responseType.code} ${responseType.message}\r\n';
-  if (contentType != null) {
-    statusLine += 'Content-Type: $contentType\r\n';
+      'HTTP/1.1 ${responseType.code} ${responseType.message}$crlf';
+  if (body != null) {
+    if (contentType != null) {
+      statusLine += 'Content-Type: $contentType$crlf';
+    }
+    if (contentLength != null) {
+      statusLine += 'Content-Length: $contentLength$crlf';
+    }
   }
-  if (contentLength != null) {
-    statusLine += 'Content-Length: $contentLength\r\n';
-  }
-  statusLine += '\r\n';
+  statusLine += crlf;
   if (body != null) {
     statusLine += body;
   }
